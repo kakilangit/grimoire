@@ -147,10 +147,10 @@ async fn handle_message_event(
 /// Strip a leading `<@UXXXXX>` mention prefix from Slack message text.
 fn strip_mention_prefix(text: &str) -> &str {
     let trimmed = text.trim();
-    if let Some(rest) = trimmed.strip_prefix("<@")
-        && let Some(after_mention) = rest.find('>')
-    {
-        return rest[after_mention + 1..].trim_start();
+    if let Some(rest) = trimmed.strip_prefix("<@") {
+        if let Some(after_mention) = rest.find('>') {
+            return rest[after_mention + 1..].trim_start();
+        }
     }
     trimmed
 }
