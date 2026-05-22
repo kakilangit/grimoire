@@ -1,0 +1,58 @@
+{
+  "name": "grimoire-slack",
+  "ref": "f73c29c6048f",
+  "version": "0.1.0",
+  "summoner": ">= 0.1.13",
+  "description": "Bidirectional Slack integration for Summoner",
+  "image": "ghcr.io/kakilangit/grimoire-slack:0.1.0",
+  "capabilities": ["webhooks", "events", "tools"],
+  "webhooks": {
+    "routes": ["events", "commands", "interactions"]
+  },
+  "events": {
+    "subscribes": [
+      "invocation.completed",
+      "invocation.failed",
+      "approval.pending",
+      "approval.resolved"
+    ]
+  },
+  "tools": {
+    "expected": [
+      "slack_send_message",
+      "slack_send_reply",
+      "slack_add_reaction",
+      "slack_list_channels"
+    ]
+  },
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "bot_token": {
+        "type": "string",
+        "src": "secret",
+        "description": "Slack Bot User OAuth Token (xoxb-...)"
+      },
+      "signing_secret": {
+        "type": "string",
+        "src": "secret",
+        "description": "Slack app signing secret for webhook verification"
+      },
+      "default_agent": {
+        "type": "string",
+        "src": "agent",
+        "description": "Default agent for DMs and unrouted messages"
+      },
+      "channel_agent_map": {
+        "type": "string",
+        "description": "JSON map of Slack channel ID to agent callname"
+      }
+    },
+    "required": ["bot_token", "signing_secret", "default_agent"]
+  },
+  "network": true,
+  "resources": {
+    "cpu": "0.25",
+    "memory": "128Mi"
+  }
+}
