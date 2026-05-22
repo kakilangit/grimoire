@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use grimoire_sdk::{
     Context, EventData, HookPoint, HookResponse, Plugin, PluginError, ToolDefinition,
     WebhookResponse,
 };
+use std::collections::HashMap;
 
 mod events;
 mod tools;
