@@ -28,11 +28,13 @@ jobs:
         id: check
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://crates.io/api/v1/crates/grimoire-sdk/$VERSION")
+          STATUS=$(curl -sL -o /dev/null -w '%{http_code}' "https://crates.io/api/v1/crates/grimoire-sdk/$VERSION")
+          echo "crates.io status: $STATUS"
           if [ "$STATUS" = "200" ]; then
             echo "grimoire-sdk $VERSION already on crates.io — skipping publish"
             echo "published=true" >> "$GITHUB_OUTPUT"
           else
+            echo "grimoire-sdk $VERSION not found on crates.io (status $STATUS) — will publish"
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
