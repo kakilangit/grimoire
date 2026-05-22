@@ -6,7 +6,7 @@ description = "Bidirectional Slack integration for Summoner"
 license = "MIT"
 
 [dependencies]
-summoner-plugin-sdk = { path = "../../sdk" }
+grimoire-sdk = { path = "../../sdk" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

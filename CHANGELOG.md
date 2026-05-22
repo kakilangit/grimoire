@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **summoner-plugin-sdk** — Rust SDK for building Summoner plugins
+- **grimoire-sdk** — Rust SDK for building Summoner plugins
   - `Plugin` trait with webhook, event, tools, hooks, provider, and theme handlers
   - HTTP server (axum) with health check, capability endpoints, and callback client
   - Typed request/response structs matching `plugin_contract.yaml`

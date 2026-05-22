@@ -1,7 +1,7 @@
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use std::collections::HashMap;
-use summoner_plugin_sdk::{Context, PluginError, WebhookResponse};
+use grimoire_sdk::{Context, PluginError, WebhookResponse};
 
 type HmacSha256 = Hmac<Sha256>;
 

@@ -6,7 +6,7 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! use summoner_plugin_sdk::{Plugin, PluginError, Context, run};
+//! use grimoire_sdk::{Plugin, PluginError, Context, run};
 //! use std::collections::HashMap;
 //!
 //! struct MyPlugin;

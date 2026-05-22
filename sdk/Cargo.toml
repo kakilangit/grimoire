@@ -1,12 +1,12 @@
 [package]
-name = "summoner-plugin-sdk"
+name = "grimoire-sdk"
 version = "0.1.0"
 edition = "2024"
 description = "SDK for building Summoner Grimoire plugins"
 license = "MIT"
-repository = "https://github.com/kakilangit/summoner-plugins"
-homepage = "https://github.com/kakilangit/summoner-plugins"
-keywords = ["summoner", "plugin", "sdk", "agent"]
+repository = "https://github.com/kakilangit/grimoire"
+homepage = "https://github.com/kakilangit/grimoire"
+keywords = ["summoner", "grimoire", "plugin", "sdk", "agent"]
 categories = ["development-tools"]
 
 [dependencies]

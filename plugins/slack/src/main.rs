@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use summoner_plugin_sdk::{
+use grimoire_sdk::{
     Context, EventData, HookPoint, HookResponse, Plugin, PluginError, ToolDefinition,
     WebhookResponse,
 };
@@ -59,5 +59,5 @@ impl Plugin for SlackPlugin {
 
 #[tokio::main]
 async fn main() {
-    summoner_plugin_sdk::run(SlackPlugin).await;
+    grimoire_sdk::run(SlackPlugin).await;
 }

@@ -1,7 +1,7 @@
 use std::sync::OnceLock;
 
 use reqwest::Client;
-use summoner_plugin_sdk::{Context, PluginError, ToolDefinition};
+use grimoire_sdk::{Context, PluginError, ToolDefinition};
 
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 
