@@ -1,7 +1,8 @@
 [package]
 name = "grimoire-slack"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
 description = "Bidirectional Slack integration for Summoner"
 license = "MIT"
 
