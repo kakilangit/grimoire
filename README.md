@@ -6,7 +6,7 @@ Official plugin repository for [Summoner](https://github.com/kakilangit/summoner
 
 ```
 grimoire/
-├── sdk/              # grimoire-sdk crate
+├── sdk/              # grimoire-sdk crate (async, tokio + axum + reqwest)
 ├── plugins/
 │   └── slack/        # grimoire-slack — Slack integration
 ├── Cargo.toml        # workspace
@@ -31,10 +31,21 @@ make build-slack
 
 ## Releasing
 
-Bump the version in `plugins/<name>/VERSION` and merge to `main`. The release workflow automatically builds and pushes the OCI image to GHCR:
+### Plugins
+
+Bump the version in `plugins/<name>/VERSION` and merge to `main`. The release workflow builds and pushes the OCI image to GHCR:
 
 ```
 ghcr.io/kakilangit/grimoire-<name>:<version>
+```
+
+### SDK
+
+Tag with `sdk-v<version>` (e.g. `sdk-v0.1.0`). The publish workflow verifies the tag matches `sdk/Cargo.toml` version and publishes to crates.io:
+
+```sh
+git tag sdk-v0.1.0
+git push --tags
 ```
 
 ## Available Plugins
