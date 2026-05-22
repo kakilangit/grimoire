@@ -1,6 +1,6 @@
 # Summoner Plugins (Grimoires)
 
-Official plugin repository for [Summoner](https://github.com/kakilangit/summoner). Each plugin is a Rust binary that speaks MCP (JSON-RPC 2.0) over stdio, packaged as an OCI container image.
+Official plugin repository for [Summoner](https://github.com/kakilangit/summoner). Each plugin is a Rust binary that communicates with Summoner over bidirectional HTTP, packaged as an OCI container image.
 
 ## Structure
 
