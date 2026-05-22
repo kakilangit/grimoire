@@ -1,0 +1,21 @@
+[package]
+name = "grimoire-slack"
+version = "0.1.0"
+edition = "2024"
+description = "Bidirectional Slack integration for Summoner"
+license = "MIT"
+
+[dependencies]
+summoner-plugin-sdk = { path = "../../sdk" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+tracing.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true
+form_urlencoded = "1"
+
+[lints]
+workspace = true
