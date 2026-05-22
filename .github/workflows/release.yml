@@ -2,8 +2,7 @@ name: Release Plugin
 on:
   push:
     branches: [main]
-    paths:
-      - 'plugins/*/VERSION'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -12,86 +11,59 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      plugins: ${{ steps.changed.outputs.plugins }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
-      - id: changed
-        run: |
-          plugins=$(git diff --name-only HEAD~1 HEAD | \
-            grep '^plugins/.*/VERSION$' | \
-            sed 's|plugins/\(.*\)/VERSION|\1|' | \
-            jq -R -s -c 'split("\n") | map(select(. != ""))')
-          echo "plugins=$plugins" >> "$GITHUB_OUTPUT"
-
-  check:
-    needs: detect
-    if: needs.detect.outputs.plugins != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        plugin: ${{ fromJson(needs.detect.outputs.plugins) }}
-    outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
-      version: ${{ steps.version.outputs.version }}
+      matrix: ${{ steps.scan.outputs.matrix }}
     steps:
       - uses: actions/checkout@v5
 
-      - name: Read VERSION file
-        id: version
-        run: echo "version=$(cat plugins/${{ matrix.plugin }}/VERSION | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
-
-      - name: Check if version is newer than released
-        id: check
+      - name: Scan plugins for unreleased versions
+        id: scan
         run: |
-          FILE_VERSION="${{ steps.version.outputs.version }}"
+          results='[]'
+          for version_file in plugins/*/VERSION; do
+            plugin=$(echo "$version_file" | sed 's|plugins/\(.*\)/VERSION|\1|')
+            version=$(cat "$version_file" | tr -d '[:space:]')
+            tag="${plugin}-v${version}"
 
-          RELEASED=$(gh release list --repo "${{ github.repository }}" \
-            --json tagName --jq '[.[] | select(.tagName | startswith("${{ matrix.plugin }}-v")) | .tagName | ltrimstr("${{ matrix.plugin }}-v")] | sort | reverse | .[0] // ""' 2>/dev/null || echo "")
-
-          if [ -z "$RELEASED" ]; then
-            echo "No existing release found — first release"
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Released: $RELEASED, VERSION file: $FILE_VERSION"
-            IFS='.' read -r r_major r_minor r_patch <<< "$RELEASED"
-            IFS='.' read -r f_major f_minor f_patch <<< "$FILE_VERSION"
-            r_major=${r_major:-0}; r_minor=${r_minor:-0}; r_patch=${r_patch:-0}
-            f_major=${f_major:-0}; f_minor=${f_minor:-0}; f_patch=${f_patch:-0}
-
-            if [ "$f_major" -gt "$r_major" ] || \
-               { [ "$f_major" -eq "$r_major" ] && [ "$f_minor" -gt "$r_minor" ]; } || \
-               { [ "$f_major" -eq "$r_major" ] && [ "$f_minor" -eq "$r_minor" ] && [ "$f_patch" -gt "$r_patch" ]; }; then
-              echo "VERSION $FILE_VERSION is newer than released $RELEASED"
-              echo "should_release=true" >> "$GITHUB_OUTPUT"
+            if gh release view "$tag" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+              echo "Release $tag already exists — skipping $plugin"
             else
-              echo "VERSION $FILE_VERSION is not newer than released $RELEASED — skipping"
-              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              echo "No release $tag — will build $plugin $version"
+              results=$(echo "$results" | jq -c --arg p "$plugin" --arg v "$version" '. + [{"plugin": $p, "version": $v}]')
             fi
+          done
+
+          if [ "$results" = "[]" ]; then
+            echo "matrix=" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=$(echo "$results" | jq -c '{include: .}')" >> "$GITHUB_OUTPUT"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    needs: check
-    if: needs.check.outputs.should_release == 'true'
+    needs: detect
+    if: needs.detect.outputs.matrix != ''
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.detect.outputs.plugins) }}
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
         include:
-          - platform: linux/amd64
-            runner: ubuntu-latest
+          - runner: ubuntu-latest
+            platform: linux/amd64
             suffix: amd64
-          - platform: linux/arm64
-            runner: ubuntu-24.04-arm
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
             suffix: arm64
+      fail-fast: false
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v5
+
+      - name: Resolve plugins to build
+        id: plugins
+        run: echo "plugins=$(echo '${{ needs.detect.outputs.matrix }}' | jq -c '.include')" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4
 
@@ -101,27 +73,30 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: plugins/${{ matrix.plugin }}/Dockerfile
-          platforms: ${{ matrix.platform }}
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/grimoire-${{ matrix.plugin }}:${{ needs.check.outputs.version }}-${{ matrix.suffix }}
-          labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.description=Grimoire plugin: ${{ matrix.plugin }}
-            org.opencontainers.image.licenses=MIT
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/grimoire-${{ matrix.plugin }}:${{ needs.check.outputs.version }}-${{ matrix.suffix }}
-          cache-to: type=inline
+      - name: Build and push each plugin
+        run: |
+          echo '${{ steps.plugins.outputs.plugins }}' | jq -c '.[]' | while read -r entry; do
+            plugin=$(echo "$entry" | jq -r '.plugin')
+            version=$(echo "$entry" | jq -r '.version')
+            image="${{ env.REGISTRY }}/${{ github.repository_owner }}/grimoire-${plugin}"
+
+            echo "Building $plugin $version for ${{ matrix.platform }}"
+            docker buildx build \
+              --platform ${{ matrix.platform }} \
+              --file "plugins/${plugin}/Dockerfile" \
+              --tag "${image}:${version}-${{ matrix.suffix }}" \
+              --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+              --label "org.opencontainers.image.description=Grimoire plugin: ${plugin}" \
+              --label "org.opencontainers.image.licenses=MIT" \
+              --cache-from "type=registry,ref=${image}:${version}-${{ matrix.suffix }}" \
+              --push \
+              .
+          done
 
   manifest:
     name: Manifest & Release
-    needs: [check, build]
+    needs: [detect, build]
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        plugin: ${{ fromJson(needs.detect.outputs.plugins) }}
     permissions:
       contents: write
       packages: write
@@ -134,21 +109,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push manifest
-        env:
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/grimoire-${{ matrix.plugin }}
-          VERSION: ${{ needs.check.outputs.version }}
+      - name: Create manifests and releases
         run: |
-          docker buildx imagetools create \
-            -t $IMAGE:$VERSION \
-            -t $IMAGE:latest \
-            $IMAGE:$VERSION-amd64 \
-            $IMAGE:$VERSION-arm64
+          echo '${{ needs.detect.outputs.matrix }}' | jq -c '.include[]' | while read -r entry; do
+            plugin=$(echo "$entry" | jq -r '.plugin')
+            version=$(echo "$entry" | jq -r '.version')
+            image="${{ env.REGISTRY }}/${{ github.repository_owner }}/grimoire-${plugin}"
+            tag="${plugin}-v${version}"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ matrix.plugin }}-v${{ needs.check.outputs.version }}
-          name: "grimoire-${{ matrix.plugin }} v${{ needs.check.outputs.version }}"
-          body: "Plugin `grimoire-${{ matrix.plugin }}` version ${{ needs.check.outputs.version }}"
-          generate_release_notes: true
+            echo "Creating manifest for $plugin $version"
+            docker buildx imagetools create \
+              -t "${image}:${version}" \
+              -t "${image}:latest" \
+              "${image}:${version}-amd64" \
+              "${image}:${version}-arm64"
+
+            echo "Creating GitHub release $tag"
+            gh release create "$tag" \
+              --repo "${{ github.repository }}" \
+              --title "grimoire-${plugin} v${version}" \
+              --notes "Plugin \`grimoire-${plugin}\` version ${version}" \
+              --generate-notes
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
