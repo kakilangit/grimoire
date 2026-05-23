@@ -23,10 +23,15 @@
 
 mod callback;
 pub mod contract;
+pub mod provider;
 mod server;
 mod types;
 
 pub use contract::{EventData, InvocationResult};
+pub use provider::{
+    ChatChunk, ChatDelta, ChatMessage, ChatRequest, ChatResponse, Model, ModelCapability,
+    ModelsResponse, ToolCall, ToolCallDelta, ToolCallFunction, ToolCallFunctionDelta, Usage,
+};
 pub use server::run;
 pub use types::*;
 
@@ -108,5 +113,46 @@ pub trait Plugin: Send + Sync + 'static {
         _external_ref: Option<&str>,
     ) -> impl std::future::Future<Output = Result<(), PluginError>> + Send {
         async { Ok(()) }
+    }
+
+    // -----------------------------------------------------------------
+    // Provider capability (optional)
+    // -----------------------------------------------------------------
+
+    /// Whether this plugin implements the provider capability.
+    /// Override to return `true` if your plugin serves as an inference provider.
+    fn is_provider(&self) -> bool {
+        false
+    }
+
+    /// List models available from this provider.
+    /// Required when `is_provider()` returns `true`.
+    fn list_models(
+        &self,
+        _ctx: &Context,
+    ) -> impl std::future::Future<Output = Result<Vec<Model>, PluginError>> + Send {
+        async { Err(PluginError::MethodNotFound("list_models".into())) }
+    }
+
+    /// Handle a non-streaming chat completion request.
+    /// Required when `is_provider()` returns `true`.
+    fn handle_chat(
+        &self,
+        _ctx: &Context,
+        _request: &ChatRequest,
+    ) -> impl std::future::Future<Output = Result<ChatResponse, PluginError>> + Send {
+        async { Err(PluginError::MethodNotFound("chat".into())) }
+    }
+
+    /// Handle a streaming chat completion request.
+    /// Send chunks via the provided sender. The SDK handles SSE framing.
+    /// Required when `is_provider()` returns `true` and `stream: true`.
+    fn handle_chat_stream(
+        &self,
+        _ctx: &Context,
+        _request: &ChatRequest,
+        _tx: tokio::sync::mpsc::Sender<ChatChunk>,
+    ) -> impl std::future::Future<Output = Result<(), PluginError>> + Send {
+        async { Err(PluginError::MethodNotFound("chat_stream".into())) }
     }
 }
