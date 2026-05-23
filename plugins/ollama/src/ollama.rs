@@ -19,8 +19,7 @@ struct TagsResponse {
 
 #[derive(Deserialize)]
 struct TagModel {
-    #[serde(alias = "name")]
-    model: String,
+    name: String,
 }
 
 pub async fn list_models(base_url: &str) -> Result<Vec<Model>, PluginError> {
@@ -46,9 +45,9 @@ pub async fn list_models(base_url: &str) -> Result<Vec<Model>, PluginError> {
         .models
         .into_iter()
         .map(|m| {
-            let name = m.model.clone();
+            let name = m.name.clone();
             Model {
-                id: m.model,
+                id: m.name,
                 name,
                 context_length: None,
                 capabilities: Some(vec![ModelCapability::Chat, ModelCapability::Tools]),
@@ -79,6 +78,8 @@ struct OaiMessage {
     role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_calls: Option<Vec<OaiToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -130,6 +131,7 @@ fn to_oai_messages(messages: &[ChatMessage]) -> Vec<OaiMessage> {
         .map(|m| OaiMessage {
             role: m.role.clone(),
             content: m.content.clone(),
+            reasoning: None,
             tool_calls: m.tool_calls.as_ref().map(|tcs| {
                 tcs.iter()
                     .map(|tc| OaiToolCall {
@@ -226,6 +228,8 @@ struct OaiStreamDelta {
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    reasoning: Option<String>,
+    #[serde(default)]
     tool_calls: Option<Vec<OaiStreamToolCall>>,
 }
 
@@ -316,9 +320,19 @@ pub async fn chat_stream(
             };
 
             for choice in parsed.choices {
+                // Merge reasoning into content — grimoire protocol has no
+                // separate reasoning field. Skip chunks with no text at all.
+                let text = match (&choice.delta.content, &choice.delta.reasoning) {
+                    (Some(c), _) if !c.is_empty() => Some(c.clone()),
+                    (_, Some(r)) if !r.is_empty() => Some(r.clone()),
+                    _ if choice.finish_reason.is_some() => None,
+                    _ if choice.delta.tool_calls.is_some() => None,
+                    _ => continue,
+                };
+
                 let chunk = ChatChunk {
                     delta: ChatDelta {
-                        content: choice.delta.content,
+                        content: text,
                         tool_calls: choice.delta.tool_calls.map(|tcs| {
                             tcs.into_iter()
                                 .map(|tc| ToolCallDelta {

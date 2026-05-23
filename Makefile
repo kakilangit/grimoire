@@ -1,4 +1,4 @@
-.PHONY: fmt lint test ci build-slack push-slack ref
+.PHONY: fmt lint test ci build-slack push-slack build-ollama push-ollama ref
 
 fmt:
 	cargo fmt --all
@@ -22,6 +22,16 @@ build-slack:
 push-slack: build-slack
 	docker push $(SLACK_IMAGE):$(SLACK_VERSION)
 	docker push $(SLACK_IMAGE):latest
+
+OLLAMA_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' plugins/ollama/Cargo.toml)
+OLLAMA_IMAGE := ghcr.io/kakilangit/grimoire-ollama
+
+build-ollama:
+	docker build -t $(OLLAMA_IMAGE):$(OLLAMA_VERSION) -t $(OLLAMA_IMAGE):latest -f plugins/ollama/Dockerfile .
+
+push-ollama: build-ollama
+	docker push $(OLLAMA_IMAGE):$(OLLAMA_VERSION)
+	docker push $(OLLAMA_IMAGE):latest
 
 # Generate a plugin ref from an image path: make ref IMAGE=ghcr.io/kakilangit/grimoire-slack
 ref:

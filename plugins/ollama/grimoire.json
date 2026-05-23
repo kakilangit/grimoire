@@ -1,6 +1,6 @@
 {
   "name": "grimoire-ollama",
-  "ref": "a1b2c3d4e5f6",
+  "ref": "f35a8ebf89a8",
   "version": "0.1.0",
   "summoner": ">= 0.1.17",
   "description": "Ollama inference provider — exposes local Ollama models as a Summoner gateway",
