@@ -21,15 +21,21 @@ grimoire/
 make ci
 
 # Build a plugin container locally
-make build-slack
-make build-ollama
+make build PLUGIN=ollama
+make build PLUGIN=slack
+
+# Build all plugins
+make build
+
+# Push a plugin to GHCR
+make push PLUGIN=ollama
 ```
 
 ## Creating a Plugin
 
 1. Create `plugins/<name>/` with `Cargo.toml`, `src/main.rs`, `grimoire.json`, `Dockerfile`, `VERSION`
 2. Implement `grimoire_sdk::Plugin` trait
-3. Add the plugin to the workspace in root `Cargo.toml`
+3. The workspace auto-discovers plugins via `plugins/*` — no manual registration needed
 
 ## Releasing
 

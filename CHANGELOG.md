@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 
 - Workspace deps declare version only; crates drive their own features
 - `Plugin` trait: removed `theme` capability methods
+- Makefile: generic `make build PLUGIN=<name>` / `make push PLUGIN=<name>` replaces per-plugin targets
 
 ## [0.1.0] - 2026-05-22
 
