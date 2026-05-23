@@ -44,7 +44,7 @@ make push PLUGIN=ollama
 Bump the version in `plugins/<name>/VERSION` and merge to `main`. The release workflow builds and pushes the OCI image to GHCR:
 
 ```
-ghcr.io/kakilangit/grimoire-<name>:<version>
+ghcr.io/kakilangit/grimoire:<name>-<version>
 ```
 
 ### SDK
