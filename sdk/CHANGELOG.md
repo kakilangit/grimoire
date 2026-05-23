@@ -1,15 +1,5 @@
 # Changelog
 
-## 0.1.2
-
-### Added
-
-- SDK README with crates.io, docs.rs, and license badges
-
-### Changed
-
-- Root README badges for crates.io, docs.rs, and license
-
 ## 0.1.1
 
 ### Added
@@ -17,6 +7,8 @@
 - Provider capability: `list_models`, `handle_chat`, `handle_chat_stream`
 - OpenAI-compatible SSE streaming (`read_oai_stream`)
 - `SseReader` for parsing server-sent events
+- SDK README with crates.io, docs.rs, and license badges
+- Root README badges for crates.io, docs.rs, and license
 
 ### Changed
 
