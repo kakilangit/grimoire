@@ -60,11 +60,13 @@ jobs:
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
           echo "Checking if grimoire-sdk@$VERSION is already published..."
-          if cargo info "grimoire-sdk@$VERSION" > /dev/null 2>&1; then
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://crates.io/api/v1/crates/grimoire-sdk/$VERSION")
+          if [ "$HTTP_STATUS" = "200" ]; then
             echo "grimoire-sdk@$VERSION already published, skipping"
             echo "already-published=true" >> $GITHUB_OUTPUT
           else
-            echo "grimoire-sdk@$VERSION not published yet"
+            echo "grimoire-sdk@$VERSION not published yet (HTTP $HTTP_STATUS)"
             echo "already-published=false" >> $GITHUB_OUTPUT
           fi
 
