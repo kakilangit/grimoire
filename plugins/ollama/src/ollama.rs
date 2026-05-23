@@ -3,10 +3,9 @@
 //! Ollama exposes an OpenAI-compatible API at `/v1/chat/completions` and
 //! a native `/api/tags` endpoint for listing models.
 
-use futures_util::StreamExt;
 use grimoire_sdk::{
-    ChatChunk, ChatDelta, ChatMessage, ChatRequest, ChatResponse, Model, ModelCapability,
-    PluginError, ToolCall, ToolCallDelta, ToolCallFunction, ToolCallFunctionDelta, Usage,
+    ChatChunk, ChatMessage, ChatRequest, ChatResponse, Model, ModelCapability, PluginError,
+    ToolCall, ToolCallFunction, Usage, read_oai_stream,
 };
 use serde::{Deserialize, Serialize};
 
@@ -245,47 +244,6 @@ pub async fn chat(base_url: &str, request: &ChatRequest) -> Result<ChatResponse,
 
 // ─── Chat (streaming) ────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct OaiStreamChoice {
-    delta: OaiStreamDelta,
-    #[serde(default)]
-    finish_reason: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct OaiStreamDelta {
-    #[serde(default)]
-    content: Option<String>,
-    #[serde(default)]
-    reasoning: Option<String>,
-    #[serde(default)]
-    tool_calls: Option<Vec<OaiStreamToolCall>>,
-}
-
-#[derive(Deserialize)]
-struct OaiStreamToolCall {
-    index: u32,
-    #[serde(default)]
-    id: Option<String>,
-    #[serde(default)]
-    function: Option<OaiStreamFunction>,
-}
-
-#[derive(Deserialize)]
-struct OaiStreamFunction {
-    #[serde(default)]
-    name: Option<String>,
-    #[serde(default)]
-    arguments: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct OaiStreamResponse {
-    choices: Vec<OaiStreamChoice>,
-    #[serde(default)]
-    usage: Option<OaiUsage>,
-}
-
 pub async fn chat_stream(
     base_url: &str,
     request: &ChatRequest,
@@ -302,79 +260,5 @@ pub async fn chat_stream(
 
     let resp = checked_response(resp, "/v1/chat/completions (stream)").await?;
 
-    let mut buffer = String::new();
-    let mut bytes_stream = resp.bytes_stream();
-    while let Some(chunk_result) = bytes_stream.next().await {
-        let chunk_bytes =
-            chunk_result.map_err(|e| PluginError::Internal(format!("stream read error: {e}")))?;
-        buffer.push_str(&String::from_utf8_lossy(&chunk_bytes));
-
-        // Process complete SSE lines
-        while let Some(line_end) = buffer.find('\n') {
-            let line = buffer[..line_end].trim().to_string();
-            buffer = buffer[line_end + 1..].to_string();
-
-            if line.is_empty() || line.starts_with(':') {
-                continue;
-            }
-
-            let data = if let Some(stripped) = line.strip_prefix("data: ") {
-                stripped.trim()
-            } else {
-                continue;
-            };
-
-            if data == "[DONE]" {
-                return Ok(());
-            }
-
-            let parsed: OaiStreamResponse = match serde_json::from_str(data) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-
-            for choice in parsed.choices {
-                // Merge reasoning into content — grimoire protocol has no
-                // separate reasoning field. Skip chunks with no text at all.
-                let text = match (&choice.delta.content, &choice.delta.reasoning) {
-                    (Some(c), _) if !c.is_empty() => Some(c.clone()),
-                    (_, Some(r)) if !r.is_empty() => Some(r.clone()),
-                    _ if choice.finish_reason.is_some() => None,
-                    _ if choice.delta.tool_calls.is_some() => None,
-                    _ => continue,
-                };
-
-                let chunk = ChatChunk {
-                    delta: ChatDelta {
-                        content: text,
-                        tool_calls: choice.delta.tool_calls.map(|tcs| {
-                            tcs.into_iter()
-                                .map(|tc| ToolCallDelta {
-                                    index: tc.index,
-                                    id: tc.id,
-                                    function: tc.function.map(|f| ToolCallFunctionDelta {
-                                        name: f.name,
-                                        arguments: f.arguments,
-                                    }),
-                                })
-                                .collect()
-                        }),
-                    },
-                    finish_reason: choice.finish_reason,
-                    usage: parsed.usage.as_ref().map(|u| Usage {
-                        prompt_tokens: u.prompt_tokens,
-                        completion_tokens: u.completion_tokens,
-                        total_tokens: u.total_tokens,
-                    }),
-                };
-
-                if tx.send(chunk).await.is_err() {
-                    // Receiver dropped — client disconnected
-                    return Ok(());
-                }
-            }
-        }
-    }
-
-    Ok(())
+    read_oai_stream(resp, &tx).await
 }

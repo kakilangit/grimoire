@@ -395,7 +395,6 @@ dependencies = [
 name = "grimoire-ollama"
 version = "0.1.0"
 dependencies = [
- "futures-util",
  "grimoire-sdk",
  "reqwest",
  "serde",
@@ -410,6 +409,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64",
+ "futures-util",
  "reqwest",
  "serde",
  "serde_json",

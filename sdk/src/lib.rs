@@ -25,6 +25,7 @@ mod callback;
 pub mod contract;
 pub mod provider;
 mod server;
+pub mod streaming;
 mod types;
 
 pub use contract::{EventData, InvocationResult};
@@ -33,6 +34,7 @@ pub use provider::{
     ModelsResponse, ToolCall, ToolCallDelta, ToolCallFunction, ToolCallFunctionDelta, Usage,
 };
 pub use server::run;
+pub use streaming::{SseReader, read_oai_stream};
 pub use types::*;
 
 use std::collections::HashMap;
