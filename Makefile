@@ -1,4 +1,7 @@
-.PHONY: fmt lint test ci build-slack push-slack ref
+.PHONY: fmt lint test ci build push ref
+
+PLUGINS := $(notdir $(wildcard plugins/*))
+REGISTRY := ghcr.io/kakilangit
 
 fmt:
 	cargo fmt --all
@@ -12,17 +15,40 @@ test:
 
 ci: lint test
 
-# Version is read from Cargo.toml — edit version there and in grimoire.json.
-SLACK_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' plugins/slack/Cargo.toml)
-SLACK_IMAGE := ghcr.io/kakilangit/grimoire-slack
+# ── Plugin build/push ────────────────────────────────────────────────────────
+# Usage: make build PLUGIN=ollama
+#        make push  PLUGIN=slack
+#        make build (builds all plugins)
 
-build-slack:
-	docker build -t $(SLACK_IMAGE):$(SLACK_VERSION) -t $(SLACK_IMAGE):latest -f plugins/slack/Dockerfile .
+plugin-version = $(shell sed -n 's/^version = "\(.*\)"/\1/p' plugins/$(1)/Cargo.toml)
+plugin-image   = $(REGISTRY)/grimoire-$(1)
 
-push-slack: build-slack
-	docker push $(SLACK_IMAGE):$(SLACK_VERSION)
-	docker push $(SLACK_IMAGE):latest
+ifdef PLUGIN
+build:
+	docker build \
+		-t $(call plugin-image,$(PLUGIN)):$(call plugin-version,$(PLUGIN)) \
+		-t $(call plugin-image,$(PLUGIN)):latest \
+		-f plugins/$(PLUGIN)/Dockerfile .
 
-# Generate a plugin ref from an image path: make ref IMAGE=ghcr.io/kakilangit/grimoire-slack
+push: build
+	docker push $(call plugin-image,$(PLUGIN)):$(call plugin-version,$(PLUGIN))
+	docker push $(call plugin-image,$(PLUGIN)):latest
+else
+build:
+	@$(foreach p,$(PLUGINS),\
+		echo "=== building $(p) ===" && \
+		docker build \
+			-t $(call plugin-image,$(p)):$(call plugin-version,$(p)) \
+			-t $(call plugin-image,$(p)):latest \
+			-f plugins/$(p)/Dockerfile . && \
+	) true
+
+push:
+	@$(foreach p,$(PLUGINS),\
+		$(MAKE) push PLUGIN=$(p) && \
+	) true
+endif
+
+# Generate a plugin ref: make ref IMAGE=ghcr.io/kakilangit/grimoire-slack
 ref:
 	@printf '%s' "$(IMAGE)" | shasum -a 256 | cut -c1-12
