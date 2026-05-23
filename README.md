@@ -1,5 +1,9 @@
 # Grimoires
 
+[![crates.io](https://img.shields.io/crates/v/grimoire-sdk.svg)](https://crates.io/crates/grimoire-sdk)
+[![docs.rs](https://docs.rs/grimoire-sdk/badge.svg)](https://docs.rs/grimoire-sdk)
+[![license](https://img.shields.io/crates/l/grimoire-sdk.svg)](LICENSE)
+
 Official plugin repository for [Summoner](https://github.com/kakilangit/summoner). Each plugin is a Rust binary that communicates with Summoner over bidirectional HTTP, packaged as an OCI container image.
 
 ## Structure
