@@ -97,7 +97,9 @@ pub struct Context {
     pub plugin_id: String,
     #[serde(default)]
     pub config: HashMap<String, String>,
+    #[serde(default)]
     pub callback_url: String,
+    #[serde(default)]
     pub callback_token: String,
 }
 

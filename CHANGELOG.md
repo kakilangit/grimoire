@@ -23,6 +23,11 @@ All notable changes to this project will be documented in this file.
 - Workspace deps declare version only; crates drive their own features
 - `Plugin` trait: removed `theme` capability methods
 - Makefile: generic `make build PLUGIN=<name>` / `make push PLUGIN=<name>` replaces per-plugin targets
+- Image registry reverted to GHCR (`ghcr.io/kakilangit/grimoire:<plugin>-<version>`)
+
+### Fixed
+
+- SDK `Context` struct: `callback_url` and `callback_token` fields now use `#[serde(default)]` — requests without callbacks (e.g. `/models`) no longer fail deserialization
 
 ## [0.1.0] - 2026-05-22
 
