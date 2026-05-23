@@ -1,0 +1,24 @@
+{
+  "name": "grimoire-ollama",
+  "ref": "a1b2c3d4e5f6",
+  "version": "0.1.0",
+  "summoner": ">= 0.1.17",
+  "description": "Ollama inference provider — exposes local Ollama models as a Summoner gateway",
+  "image": "ghcr.io/kakilangit/grimoire-ollama:0.1.0",
+  "capabilities": ["provider"],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "ollama_url": {
+        "type": "string",
+        "description": "Ollama API base URL (e.g. http://host.docker.internal:11434)"
+      }
+    },
+    "required": ["ollama_url"]
+  },
+  "network": true,
+  "resources": {
+    "cpu": "0.25",
+    "memory": "128Mi"
+  }
+}

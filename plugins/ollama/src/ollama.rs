@@ -1,0 +1,352 @@
+//! Ollama API client.
+//!
+//! Ollama exposes an OpenAI-compatible API at `/v1/chat/completions` and
+//! a native `/api/tags` endpoint for listing models.
+
+use futures_util::StreamExt;
+use grimoire_sdk::{
+    ChatChunk, ChatDelta, ChatMessage, ChatRequest, ChatResponse, Model, ModelCapability,
+    PluginError, ToolCall, ToolCallDelta, ToolCallFunction, ToolCallFunctionDelta, Usage,
+};
+use serde::{Deserialize, Serialize};
+
+// ─── List Models ─────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct TagsResponse {
+    models: Vec<TagModel>,
+}
+
+#[derive(Deserialize)]
+struct TagModel {
+    #[serde(alias = "name")]
+    model: String,
+}
+
+pub async fn list_models(base_url: &str) -> Result<Vec<Model>, PluginError> {
+    let url = format!("{base_url}/api/tags");
+    let resp = reqwest::get(&url)
+        .await
+        .map_err(|e| PluginError::Internal(format!("ollama tags request failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(PluginError::Internal(format!(
+            "ollama /api/tags returned {status}: {body}"
+        )));
+    }
+
+    let tags: TagsResponse = resp
+        .json()
+        .await
+        .map_err(|e| PluginError::Internal(format!("failed to parse tags response: {e}")))?;
+
+    let models = tags
+        .models
+        .into_iter()
+        .map(|m| {
+            let name = m.model.clone();
+            Model {
+                id: m.model,
+                name,
+                context_length: None,
+                capabilities: Some(vec![ModelCapability::Chat, ModelCapability::Tools]),
+            }
+        })
+        .collect();
+
+    Ok(models)
+}
+
+// ─── Chat (non-streaming) ────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+struct OaiRequest {
+    model: String,
+    messages: Vec<OaiMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<u64>,
+    stream: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct OaiMessage {
+    role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<OaiToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct OaiToolCall {
+    id: String,
+    #[serde(rename = "type")]
+    call_type: String,
+    function: OaiFunction,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct OaiFunction {
+    name: String,
+    arguments: String,
+}
+
+#[derive(Deserialize)]
+struct OaiResponse {
+    choices: Vec<OaiChoice>,
+    #[serde(default)]
+    usage: Option<OaiUsage>,
+}
+
+#[derive(Deserialize)]
+struct OaiChoice {
+    message: OaiMessage,
+    #[serde(default)]
+    finish_reason: Option<String>,
+}
+
+#[allow(clippy::struct_field_names)]
+#[derive(Deserialize)]
+struct OaiUsage {
+    #[serde(default)]
+    prompt_tokens: u64,
+    #[serde(default)]
+    completion_tokens: u64,
+    #[serde(default)]
+    total_tokens: u64,
+}
+
+fn to_oai_messages(messages: &[ChatMessage]) -> Vec<OaiMessage> {
+    messages
+        .iter()
+        .map(|m| OaiMessage {
+            role: m.role.clone(),
+            content: m.content.clone(),
+            tool_calls: m.tool_calls.as_ref().map(|tcs| {
+                tcs.iter()
+                    .map(|tc| OaiToolCall {
+                        id: tc.id.clone(),
+                        call_type: tc.call_type.clone(),
+                        function: OaiFunction {
+                            name: tc.function.name.clone(),
+                            arguments: tc.function.arguments.clone(),
+                        },
+                    })
+                    .collect()
+            }),
+            tool_call_id: m.tool_call_id.clone(),
+        })
+        .collect()
+}
+
+pub async fn chat(base_url: &str, request: &ChatRequest) -> Result<ChatResponse, PluginError> {
+    let url = format!("{base_url}/v1/chat/completions");
+    let body = OaiRequest {
+        model: request.model.clone(),
+        messages: to_oai_messages(&request.messages),
+        tools: request.tools.clone(),
+        temperature: request.temperature,
+        max_tokens: request.max_tokens,
+        stream: false,
+    };
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| PluginError::Internal(format!("ollama chat request failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(PluginError::Internal(format!(
+            "ollama /v1/chat/completions returned {status}: {text}"
+        )));
+    }
+
+    let oai: OaiResponse = resp
+        .json()
+        .await
+        .map_err(|e| PluginError::Internal(format!("failed to parse chat response: {e}")))?;
+
+    let choice = oai
+        .choices
+        .into_iter()
+        .next()
+        .ok_or_else(|| PluginError::Internal("no choices in response".into()))?;
+
+    Ok(ChatResponse {
+        message: ChatMessage {
+            role: choice.message.role,
+            content: choice.message.content,
+            tool_calls: choice.message.tool_calls.map(|tcs| {
+                tcs.into_iter()
+                    .map(|tc| ToolCall {
+                        id: tc.id,
+                        call_type: tc.call_type,
+                        function: ToolCallFunction {
+                            name: tc.function.name,
+                            arguments: tc.function.arguments,
+                        },
+                    })
+                    .collect()
+            }),
+            tool_call_id: None,
+        },
+        usage: oai.usage.map(|u| Usage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+        }),
+        finish_reason: choice.finish_reason.unwrap_or_else(|| "stop".into()),
+    })
+}
+
+// ─── Chat (streaming) ────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct OaiStreamChoice {
+    delta: OaiStreamDelta,
+    #[serde(default)]
+    finish_reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct OaiStreamDelta {
+    #[serde(default)]
+    content: Option<String>,
+    #[serde(default)]
+    tool_calls: Option<Vec<OaiStreamToolCall>>,
+}
+
+#[derive(Deserialize)]
+struct OaiStreamToolCall {
+    index: u32,
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    function: Option<OaiStreamFunction>,
+}
+
+#[derive(Deserialize)]
+struct OaiStreamFunction {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    arguments: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct OaiStreamResponse {
+    choices: Vec<OaiStreamChoice>,
+    #[serde(default)]
+    usage: Option<OaiUsage>,
+}
+
+pub async fn chat_stream(
+    base_url: &str,
+    request: &ChatRequest,
+    tx: tokio::sync::mpsc::Sender<ChatChunk>,
+) -> Result<(), PluginError> {
+    let url = format!("{base_url}/v1/chat/completions");
+    let body = OaiRequest {
+        model: request.model.clone(),
+        messages: to_oai_messages(&request.messages),
+        tools: request.tools.clone(),
+        temperature: request.temperature,
+        max_tokens: request.max_tokens,
+        stream: true,
+    };
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| PluginError::Internal(format!("ollama stream request failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(PluginError::Internal(format!(
+            "ollama /v1/chat/completions stream returned {status}: {text}"
+        )));
+    }
+
+    let mut buffer = String::new();
+    let mut bytes_stream = resp.bytes_stream();
+    while let Some(chunk_result) = bytes_stream.next().await {
+        let chunk_bytes =
+            chunk_result.map_err(|e| PluginError::Internal(format!("stream read error: {e}")))?;
+        buffer.push_str(&String::from_utf8_lossy(&chunk_bytes));
+
+        // Process complete SSE lines
+        while let Some(line_end) = buffer.find('\n') {
+            let line = buffer[..line_end].trim().to_string();
+            buffer = buffer[line_end + 1..].to_string();
+
+            if line.is_empty() || line.starts_with(':') {
+                continue;
+            }
+
+            let data = if let Some(stripped) = line.strip_prefix("data: ") {
+                stripped.trim()
+            } else {
+                continue;
+            };
+
+            if data == "[DONE]" {
+                return Ok(());
+            }
+
+            let parsed: OaiStreamResponse = match serde_json::from_str(data) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            for choice in parsed.choices {
+                let chunk = ChatChunk {
+                    delta: ChatDelta {
+                        content: choice.delta.content,
+                        tool_calls: choice.delta.tool_calls.map(|tcs| {
+                            tcs.into_iter()
+                                .map(|tc| ToolCallDelta {
+                                    index: tc.index,
+                                    id: tc.id,
+                                    function: tc.function.map(|f| ToolCallFunctionDelta {
+                                        name: f.name,
+                                        arguments: f.arguments,
+                                    }),
+                                })
+                                .collect()
+                        }),
+                    },
+                    finish_reason: choice.finish_reason,
+                    usage: parsed.usage.as_ref().map(|u| Usage {
+                        prompt_tokens: u.prompt_tokens,
+                        completion_tokens: u.completion_tokens,
+                        total_tokens: u.total_tokens,
+                    }),
+                };
+
+                if tx.send(chunk).await.is_err() {
+                    // Receiver dropped — client disconnected
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
