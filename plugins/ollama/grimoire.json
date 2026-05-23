@@ -1,10 +1,10 @@
 {
   "name": "grimoire-ollama",
-  "ref": "f35a8ebf89a8",
-  "version": "0.1.0",
+  "ref": "09ebae871646",
+  "version": "0.1.1",
   "summoner": ">= 0.1.17",
   "description": "Ollama inference provider — exposes local Ollama models as a Summoner gateway",
-  "image": "ghcr.io/kakilangit/grimoire-ollama:0.1.0",
+  "image": "docker.io/kakilangit/grimoire:ollama-0.1.1",
   "capabilities": ["provider"],
   "config_schema": {
     "type": "object",
