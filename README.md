@@ -8,6 +8,7 @@ Official plugin repository for [Summoner](https://github.com/kakilangit/summoner
 grimoire/
 ├── sdk/              # grimoire-sdk crate (async, tokio + axum + reqwest)
 ├── plugins/
+│   ├── ollama/       # grimoire-ollama — Ollama inference provider
 │   └── slack/        # grimoire-slack — Slack integration
 ├── Cargo.toml        # workspace
 └── Makefile
@@ -21,6 +22,7 @@ make ci
 
 # Build a plugin container locally
 make build-slack
+make build-ollama
 ```
 
 ## Creating a Plugin
@@ -52,4 +54,5 @@ git push --tags
 
 | Plugin | Description | Status |
 |--------|-------------|--------|
+| `grimoire-ollama` | Ollama inference provider | In Development |
 | `grimoire-slack` | Bidirectional Slack integration | In Development |

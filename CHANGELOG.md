@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-05-23
+
+### Added
+
+- **grimoire-sdk** — Streaming helpers for provider plugins
+  - `SseReader` — buffers raw bytes and extracts SSE `data:` payloads
+  - `read_oai_stream` — full pipeline from `reqwest::Response` to `ChatChunk` channel, with reasoning merge and `[DONE]` handling
+  - Provider trait: `is_provider()`, `list_models()`, `handle_chat()`, `handle_chat_stream()`
+  - Provider types: `Model`, `ChatRequest`, `ChatResponse`, `ChatChunk`, `ChatDelta`, `ToolCall`, `Usage`
+
+- **grimoire-ollama** — Ollama inference provider plugin
+  - Proxies `GET /models` via Ollama's `/api/tags`
+  - Proxies `POST /chat` via Ollama's `/v1/chat/completions` (streaming and non-streaming)
+  - Merges `reasoning` field into content for models like Qwen
+  - Config: `ollama_url` (e.g. `http://host.docker.internal:11434`)
+
+### Changed
+
+- Workspace deps declare version only; crates drive their own features
+- `Plugin` trait: removed `theme` capability methods
+
 ## [0.1.0] - 2026-05-22
 
 ### Added
