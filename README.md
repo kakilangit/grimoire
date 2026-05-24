@@ -13,7 +13,8 @@ grimoire/
 ├── sdk/              # grimoire-sdk crate (async, tokio + axum + reqwest)
 ├── plugins/
 │   ├── ollama/       # grimoire-ollama — Ollama inference provider
-│   └── slack/        # grimoire-slack — Slack integration
+│   ├── slack/        # grimoire-slack — Slack integration
+│   └── guardrails/   # grimoire-guardrails — Content safety hooks
 ├── Cargo.toml        # workspace
 └── Makefile
 ```
@@ -21,18 +22,16 @@ grimoire/
 ## Development
 
 ```sh
-# Format, lint, test
+# Format, lint, test all
 make ci
 
 # Build a plugin container locally
 make build PLUGIN=ollama
 make build PLUGIN=slack
+make build PLUGIN=guardrails
 
 # Build all plugins
 make build
-
-# Push a plugin to GHCR
-make push PLUGIN=ollama
 ```
 
 ## Creating a Plugin
@@ -53,16 +52,21 @@ ghcr.io/kakilangit/grimoire:<name>-<version>
 
 ### SDK
 
-Tag with `sdk-v<version>` (e.g. `sdk-v0.1.0`). The publish workflow verifies the tag matches `sdk/Cargo.toml` version and publishes to crates.io:
+Tag with `sdk-v<version>` (e.g. `sdk-v0.1.1`). The publish workflow verifies the tag matches `sdk/Cargo.toml` version and publishes to crates.io:
 
 ```sh
-git tag sdk-v0.1.0
+git tag sdk-v0.1.1
 git push --tags
 ```
 
+### Streaming
+
+Plugins can call `ctx.invoke_agent_stream()` to receive tokens as they're generated via SSE. See [`grimoire-slack`](plugins/slack/src/main.rs) for an example.
+
 ## Available Plugins
 
-| Plugin | Description | Status |
-|--------|-------------|--------|
-| `grimoire-ollama` | Ollama inference provider | In Development |
-| `grimoire-slack` | Bidirectional Slack integration | In Development |
+| Plugin | Description | Capabilities |
+|--------|-------------|--------------|
+| `grimoire-ollama` | Ollama inference provider | provider |
+| `grimoire-slack` | Bidirectional Slack integration | webhooks, events, tools |
+| `grimoire-guardrails` | Content safety via hooks (blocklist, tool deny list) | hooks |
