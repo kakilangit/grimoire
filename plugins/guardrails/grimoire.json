@@ -1,0 +1,31 @@
+{
+  "name": "grimoire-guardrails",
+  "ref": "ae7a01e252f9",
+  "version": "0.1.0",
+  "summoner": ">= 0.1.18",
+  "description": "Reference hooks plugin — content and tool policy enforcement",
+  "image": "ghcr.io/kakilangit/grimoire-guardrails:v0.1.0",
+  "capabilities": ["hooks"],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "blocklist": {
+        "type": "string",
+        "description": "JSON array of blocked keywords (e.g. [\"hack\",\"exploit\"])"
+      },
+      "denied_tools": {
+        "type": "string",
+        "description": "JSON array of blocked tool names (e.g. [\"bash\",\"webfetch\"])"
+      }
+    }
+  },
+  "hooks": {
+    "points": ["before_invocation", "on_tool_call", "after_invocation", "on_error"],
+    "timeout_ms": 3000
+  },
+  "network": false,
+  "resources": {
+    "cpu": "0.1",
+    "memory": "64Mi"
+  }
+}
